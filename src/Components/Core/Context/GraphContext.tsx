@@ -39,7 +39,7 @@ export type GraphContextType = {
 export const GraphContext = createContext<GraphContextType | null>(null);
 
 const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { scene, reRenderViewer, setRenderTree } = useContext(
+  const { scene, reRenderViewer, setRenderTree, clipPlanes } = useContext(
     ViewerContext
   ) as ViewerContextType;
 
@@ -172,7 +172,11 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     // Remove meshes that are not in the `ids` array from the scene graph.
     scene.traverse((child) => {
-      if (child instanceof THREE.Mesh && !ids.includes(child.uuid)) {
+      if (
+        child instanceof THREE.Mesh &&
+        !ids.includes(child.uuid) &&
+        !(child.parent instanceof THREE.PlaneHelper)
+      ) {
         removeMesh(scene, child);
       }
     });
@@ -188,10 +192,6 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     // Check if the results of the transform query for this spatial actor are already cached. If not, query the oxiGraphStore for the transform data.
     let transformResults = cachedTransformResults.get(spatialActor);
     if (!transformResults) {
-      console.log(
-        " selectTransform(spatialActor, date)",
-        selectTransform(spatialActor, date)
-      );
       let selResult: any = await oxiGraphStore.query(
         selectTransform(spatialActor, date)
       );
@@ -269,7 +269,10 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       img.src = fileURL;
 
       img.onload = function () {
-        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          clippingPlanes: clipPlanes,
+        });
         //const material = new THREE.MeshNormalMaterial();
 
         const geometry = new THREE.PlaneGeometry(img.width, img.height);
@@ -291,6 +294,14 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         // Load the ifc file with the ifcLoader
         await ifcLoader.load(fileURL, (ifcModel) => {
           // Once loaded, assign the loaded model to the mesh object
+
+          if (ifcModel.material instanceof THREE.Material) {
+            ifcModel.material.clippingPlanes = clipPlanes;
+          } else {
+            for (const material of ifcModel.material) {
+              material.clippingPlanes = clipPlanes;
+            }
+          }
           mesh = ifcModel;
 
           // Call the updateSceneObject function with the mesh object and other necessary parameters
@@ -328,9 +339,14 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       // Set name and uuid
       mesh.name = filename;
       mesh.uuid = spatialActor;
+
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+
       // Apply Matrix and add to the scene
       mesh.applyMatrix4(getMatrixFromGraph(cleanResult, spatialActor));
       mesh.updateMatrix();
+
       scene.add(mesh);
     }
     if (cleanResult["http://example.org/scenegraph#hasParent"]) {
@@ -346,20 +362,22 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // reparents them to their designated parent object if the "parent" key
   // exists in their userData.
   function reparentAll() {
-    scene.children.forEach((object) => {
-      if (object.userData["parent"]) {
-        // Get the parent object by its uuid
-        const parent = scene.getObjectByProperty(
-          "uuid",
-          object.userData["parent"]
-        );
-        if (parent) {
-          // Remove the object from its current parent and add it to its designated parent
-          object.removeFromParent();
-          parent.add(object);
+    scene.children
+      .filter((obj) => obj.type === "Mesh" || obj.type === "Points")
+      .forEach((object) => {
+        if (object.userData["parent"]) {
+          // Get the parent object by its uuid
+          const parent = scene.getObjectByProperty(
+            "uuid",
+            object.userData["parent"]
+          );
+          if (parent) {
+            // Remove the object from its current parent and add it to its designated parent
+            object.removeFromParent();
+            parent.add(object);
+          }
         }
-      }
-    });
+      });
     // Render the updated scene in the viewer
     reRenderViewer();
   }
@@ -446,7 +464,6 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       );
       oxiGraphStore.add(matrixElement);
     }
-    console.log("Save Graph");
     await saveGraphToTtl();
     reRenderViewer();
   }
@@ -464,7 +481,6 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       oxigraph.defaultGraph()
     );
 
-    console.log(graphData);
     // Send the FormData object in a fetch request
     await fetch("http://localhost:3001/save_graph", {
       method: "POST",

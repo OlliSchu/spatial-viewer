@@ -19,14 +19,18 @@ export enum ClickMode {
 export type ViewerContextType = {
   scene: THREE.Scene | null;
   setScene: Dispatch<SetStateAction<THREE.Scene>>;
+  clipPlanes: THREE.Plane[];
+  setClipPlanes: Dispatch<SetStateAction<THREE.Plane[]>>;
+  clipHelper: THREE.PlaneHelper;
+  setClipHelper: Dispatch<SetStateAction<THREE.PlaneHelper>>;
   clickMode: ClickMode;
   setClickMode: Dispatch<SetStateAction<ClickMode>>;
   sidebarWidth: string;
   setSidebarWidth: Dispatch<SetStateAction<string>>;
   selMesh: THREE.Mesh | null;
   setSelMesh: Dispatch<SetStateAction<THREE.Mesh>>;
-  renderer: THREE.Renderer | null;
-  setRenderer: Dispatch<SetStateAction<THREE.Renderer>>;
+  renderer: THREE.WebGLRenderer | null;
+  setRenderer: Dispatch<SetStateAction<THREE.WebGLRenderer>>;
   currentCamera: THREE.PerspectiveCamera | null;
   setCurrentCamera: Dispatch<SetStateAction<THREE.PerspectiveCamera>>;
   control: TransformControls | null;
@@ -59,10 +63,16 @@ export const ViewerContext = createContext<ViewerContextType | null>(null);
 
 const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [scene, setScene] = useState<THREE.Scene | null>();
+  const [clipPlanes, setClipPlanes] = useState<THREE.Plane[]>([
+    new THREE.Plane(new THREE.Vector3(0, -1, 0), 0),
+  ]);
+  const [clipHelper, setClipHelper] = useState<THREE.PlaneHelper>(
+    new THREE.PlaneHelper(new THREE.Plane(), 0, 0)
+  );
   const [clickMode, setClickMode] = useState<ClickMode>(ClickMode.Select);
   const [sidebarWidth, setSidebarWidth] = useState<string>("500px");
   const [selMesh, setSelMesh] = useState<THREE.Mesh | null>();
-  const [renderer, setRenderer] = useState<THREE.Renderer | null>();
+  const [renderer, setRenderer] = useState<THREE.WebGLRenderer | null>();
   const [currentCamera, setCurrentCamera] =
     useState<THREE.PerspectiveCamera | null>();
   const [control, setControl] = useState<TransformControls | null>();
@@ -145,7 +155,6 @@ const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     });
 
     tControl.addEventListener("mouseUp", (event) => {
-      console.log(event);
       addChangedDocument(selectedMesh.uuid, initTransform);
     });
 
@@ -178,6 +187,10 @@ const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       value={{
         scene,
         setScene,
+        clipPlanes,
+        setClipPlanes,
+        clipHelper,
+        setClipHelper,
         clickMode,
         setClickMode,
         sidebarWidth,

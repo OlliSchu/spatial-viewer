@@ -15,6 +15,9 @@ import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer";
+import { Color } from "three";
+import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
 
 // based on: https://github.com/mrdoob/three.js/blob/master/examples/misc_controls_transform.html
 // example: https://observablehq.com/@vicapow/three-js-transformcontrols-example
@@ -40,6 +43,9 @@ export const ViewerComponent = memo(() => {
     setOrbit,
     addTransformToMesh,
     detachControls,
+    clipHelper,
+    setClipHelper,
+    clipPlanes,
   } = useContext(ViewerContext) as ViewerContextType;
 
   // Setting up raycaster & mouse
@@ -61,9 +67,12 @@ export const ViewerComponent = memo(() => {
     const height: number = canvas.clientHeight;
     const tRenderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
       alpha: true,
+      antialias: true,
     });
     tRenderer.setSize(width, height);
     tRenderer.setClearColor(0x000000, 0);
+    tRenderer.shadowMap.enabled = true;
+    tRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document
       .getElementById("ifc-viewer-container")
       .replaceChildren(tRenderer.domElement);
@@ -81,25 +90,16 @@ export const ViewerComponent = memo(() => {
     );
     const tCurrentCamera = tCameraPersp;
 
-    tCurrentCamera.position.set(10, 5, 10);
+    tCurrentCamera.position.set(2, 2, 2);
     tCurrentCamera.lookAt(0, 2, 0);
 
     const tScene = new THREE.Scene();
 
-    // Adding a grid and a simple light
     tScene.add(new THREE.GridHelper(100, 100, 0x888888, 0x444444));
-    const light = new THREE.DirectionalLight(0xffffff, 2);
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    light.position.set(10, 10, 10);
-    const lighthelper = new THREE.DirectionalLightHelper(light, 2.5, 0x000000);
-    lighthelper.name = "Lighthelper";
-
-    tScene.add(lighthelper);
-    tScene.add(light);
-    tScene.add(ambientLight);
 
     const axesHelper = new THREE.AxesHelper(5);
 
+    tScene.add(new THREE.HemisphereLight(0xffffff, 0xd9d9d9, 1));
     tScene.add(axesHelper);
 
     // Adding Orbit Controls
@@ -110,11 +110,12 @@ export const ViewerComponent = memo(() => {
       labelRenderer.render(tScene, tCurrentCamera);
     });
 
-    // Creating testing geometry and material
-    const geometry = new THREE.BoxGeometry(2, 2, 2);
-    const material = new THREE.MeshNormalMaterial();
-
     // Adding a initial dummy control
+
+    let tClipHelper = new THREE.PlaneHelper(clipPlanes[0], 10);
+    tClipHelper.visible = false;
+    tScene.add(tClipHelper);
+    setClipHelper(tClipHelper);
 
     const tControl = new TransformControls(
       tCurrentCamera,
