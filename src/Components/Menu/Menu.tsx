@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { ActionIcon, Menu, NumberInput } from "@mantine/core";
 import {
   CalendarTime,
@@ -13,21 +13,16 @@ import {
   ViewerContext,
   ViewerContextType,
 } from "../Core/Context/ViewerContext";
-import { GraphContext, GraphContextType } from "../Core/Context/GraphContext";
-import * as THREE from "three";
 
 export function ViewerMenu() {
   const {
     clickMode,
     setClickMode,
-    scene,
     reRenderViewer,
     renderer,
     clipPlanes,
     clipHelper,
   } = useContext(ViewerContext) as ViewerContextType;
-
-  const {} = useContext(GraphContext) as GraphContextType;
 
   const [clipEnabled, setClipEnabled] = useState<boolean>(false);
   const [clipHeight, setClipHeight] = useState<number>(0);
@@ -42,7 +37,7 @@ export function ViewerMenu() {
   const iconSize: number = 20;
 
   function setMeasure(event) {
-    if (clickMode != ClickMode.Measure) {
+    if (clickMode !== ClickMode.Measure) {
       setClickMode(ClickMode.Measure);
     }
     // } else {

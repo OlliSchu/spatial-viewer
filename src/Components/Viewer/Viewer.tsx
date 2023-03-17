@@ -18,6 +18,10 @@ import {
 import { Color } from "three";
 import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
+import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass";
+import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass";
 
 // based on: https://github.com/mrdoob/three.js/blob/master/examples/misc_controls_transform.html
 // example: https://observablehq.com/@vicapow/three-js-transformcontrols-example
@@ -43,7 +47,8 @@ export const ViewerComponent = memo(() => {
     setOrbit,
     addTransformToMesh,
     detachControls,
-    clipHelper,
+    setComposer,
+    setOutlinePass,
     setClipHelper,
     clipPlanes,
   } = useContext(ViewerContext) as ViewerContextType;
@@ -109,6 +114,9 @@ export const ViewerComponent = memo(() => {
       tRenderer.render(tScene, tCurrentCamera);
       labelRenderer.render(tScene, tCurrentCamera);
     });
+    tOrbit.addEventListener("end", () => {
+      console.log("Orbit End!");
+    });
 
     // Adding a initial dummy control
 
@@ -125,6 +133,26 @@ export const ViewerComponent = memo(() => {
     // Initial rerender. Later use the function
     tRenderer.render(tScene, tCurrentCamera);
 
+    // Set Up Composer
+
+    const tComposer = new EffectComposer(tRenderer);
+    const tRenderPass = new RenderPass(tScene, tCurrentCamera);
+    tComposer.addPass(tRenderPass);
+    const tOutlinePass = new OutlinePass(
+      new THREE.Vector2(width, height),
+      tScene,
+      tCurrentCamera
+    );
+    tOutlinePass.edgeStrength = 10;
+    tOutlinePass.edgeThickness = 3;
+    tOutlinePass.visibleEdgeColor.set(0xe47200);
+    tOutlinePass.hiddenEdgeColor.set("#190a05");
+    tComposer.addPass(tOutlinePass);
+
+    const effectFXAA = new ShaderPass(FXAAShader);
+    effectFXAA.uniforms["resolution"].value.set(1 / width, 1 / height);
+    tComposer.addPass(effectFXAA);
+
     // Setting the state variables. ToDo: replace with ViewerContext
     setCameraOrtho(tCameraOrtho);
     setCameraPersp(tCameraPersp);
@@ -133,6 +161,8 @@ export const ViewerComponent = memo(() => {
     setScene(tScene);
     setControl(tControl);
     setOrbit(tOrbit);
+    setComposer(tComposer);
+    setOutlinePass(tOutlinePass);
   }, []);
 
   // Init the resizer function listener
@@ -164,22 +194,9 @@ export const ViewerComponent = memo(() => {
   let drawingLine = false;
   const measurementLabels: { [key: number]: CSS2DObject } = {};
 
-  function onMouseDown(event) {
-    if (clickMode === ClickMode.Measure) {
-      console.log("down");
-      orbit.enabled = false;
-    }
-  }
-
-  function onMouseUp(event) {
-    if (clickMode === ClickMode.Measure) {
-      console.log("Up");
-      orbit.enabled = true;
-    }
-  }
-
   function onClick(event) {
     if (currentCamera) {
+      console.log("click");
       if (clickMode === ClickMode.Select) {
         const canvas = event.target;
         const x = (event.offsetX / canvas.clientWidth) * 2 - 1;
@@ -198,9 +215,11 @@ export const ViewerComponent = memo(() => {
         // Filter out ControlPlane if it is hit
         if (intersection.length > 0) {
           let currentPos = new THREE.Vector3();
-          intersection[0].object.getWorldPosition(currentPos);
-          console.log("Selected Object: ", intersection[0].object);
-          addTransformToMesh(intersection[0].object);
+          const firstInt = intersection[0];
+          firstInt.object.getWorldPosition(currentPos);
+          console.log("Selected Object: ", firstInt.object);
+
+          addTransformToMesh(firstInt.object);
         } else {
           if (control) {
             detachControls(true);

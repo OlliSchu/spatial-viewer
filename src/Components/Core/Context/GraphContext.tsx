@@ -171,11 +171,14 @@ const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     );
 
     // Remove meshes that are not in the `ids` array from the scene graph.
+    console.log(scene);
     scene.traverse((child) => {
+      console.log(child);
       if (
         child instanceof THREE.Mesh &&
         !ids.includes(child.uuid) &&
-        !(child.parent instanceof THREE.PlaneHelper)
+        !(child.parent instanceof THREE.PlaneHelper) &&
+        !child
       ) {
         removeMesh(scene, child);
       }

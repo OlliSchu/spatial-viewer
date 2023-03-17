@@ -5,6 +5,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { generateUUID } from "three/src/math/MathUtils";
 import * as oxigraph from "oxigraph";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
+import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass";
 
 export interface ChangedDocument {
   uri: string;
@@ -31,6 +33,10 @@ export type ViewerContextType = {
   setSelMesh: Dispatch<SetStateAction<THREE.Mesh>>;
   renderer: THREE.WebGLRenderer | null;
   setRenderer: Dispatch<SetStateAction<THREE.WebGLRenderer>>;
+  composer: EffectComposer;
+  setComposer: Dispatch<SetStateAction<EffectComposer>>;
+  outlinePass: OutlinePass;
+  setOutlinePass: Dispatch<SetStateAction<OutlinePass>>;
   currentCamera: THREE.PerspectiveCamera | null;
   setCurrentCamera: Dispatch<SetStateAction<THREE.PerspectiveCamera>>;
   control: TransformControls | null;
@@ -73,6 +79,8 @@ const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [sidebarWidth, setSidebarWidth] = useState<string>("500px");
   const [selMesh, setSelMesh] = useState<THREE.Mesh | null>();
   const [renderer, setRenderer] = useState<THREE.WebGLRenderer | null>();
+  const [composer, setComposer] = useState<EffectComposer>();
+  const [outlinePass, setOutlinePass] = useState<OutlinePass>();
   const [currentCamera, setCurrentCamera] =
     useState<THREE.PerspectiveCamera | null>();
   const [control, setControl] = useState<TransformControls | null>();
@@ -168,6 +176,7 @@ const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     tControl.attach(selectedMesh);
     scene.add(tControl);
+
     setControl(tControl);
     setSelMesh(selectedMesh);
     reRenderViewer();
@@ -199,6 +208,10 @@ const ViewerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setSelMesh,
         renderer,
         setRenderer,
+        composer,
+        setComposer,
+        outlinePass,
+        setOutlinePass,
         currentCamera,
         setCurrentCamera,
         control,
