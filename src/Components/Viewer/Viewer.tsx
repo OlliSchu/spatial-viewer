@@ -30,6 +30,7 @@ export const ViewerComponent = memo(() => {
   // Setting up state vars
   const [cameraPersp, setCameraPersp] = useState<THREE.PerspectiveCamera>();
   const [cameraOrtho, setCameraOrtho] = useState<THREE.OrthographicCamera>();
+  const [selectionBox, setSelectionBox] = useState<THREE.Box3Helper>();
 
   const {
     scene,
@@ -113,9 +114,10 @@ export const ViewerComponent = memo(() => {
     tOrbit.addEventListener("change", () => {
       tRenderer.render(tScene, tCurrentCamera);
       labelRenderer.render(tScene, tCurrentCamera);
+      setClickMode(ClickMode.Orbit);
     });
     tOrbit.addEventListener("end", () => {
-      console.log("Orbit End!");
+      setClickMode(ClickMode.Select);
     });
 
     // Adding a initial dummy control
@@ -189,14 +191,8 @@ export const ViewerComponent = memo(() => {
     };
   }, [control, clickMode]);
 
-  let lineId = 0;
-  let line: THREE.Line;
-  let drawingLine = false;
-  const measurementLabels: { [key: number]: CSS2DObject } = {};
-
   function onClick(event) {
     if (currentCamera) {
-      console.log("click");
       if (clickMode === ClickMode.Select) {
         const canvas = event.target;
         const x = (event.offsetX / canvas.clientWidth) * 2 - 1;
@@ -215,120 +211,60 @@ export const ViewerComponent = memo(() => {
         // Filter out ControlPlane if it is hit
         if (intersection.length > 0) {
           let currentPos = new THREE.Vector3();
-          const firstInt = intersection[0];
-          firstInt.object.getWorldPosition(currentPos);
-          console.log("Selected Object: ", firstInt.object);
+          const firstInt = intersection[0].object;
+          firstInt.getWorldPosition(currentPos);
+          addTransformToMesh(firstInt);
 
-          addTransformToMesh(firstInt.object);
+          // create a BoxHelper around the selected object
+          if (firstInt instanceof THREE.Mesh) {
+            const box = new THREE.Box3().setFromBufferAttribute(
+              firstInt.geometry.attributes.position
+            );
+            box.expandByScalar(5);
+            let pos = new THREE.Vector3();
+            let scale = new THREE.Vector3(1, 1, 1);
+            let quat = new THREE.Quaternion();
+            let matrix = new THREE.Matrix4().compose(pos, quat, scale);
+            if (selectionBox) {
+              selectionBox.box.makeEmpty();
+              selectionBox.box = box;
+              selectionBox.visible = true;
+              selectionBox.uuid = "three_spatial_viewer_selectionBox";
+              selectionBox.matrix = matrix;
+              firstInt.add(selectionBox);
+            } else {
+              const box3Helper = new THREE.Box3Helper(
+                box,
+                new THREE.Color(0xe42300)
+              );
+              box3Helper.visible = true;
+              box3Helper.uuid = "three_spatial_viewer_selectionBox";
+              box3Helper.matrix = matrix;
+              //@ts-ignore
+              box3Helper.material.linewidth = 5;
+              firstInt.add(box3Helper);
+              setSelectionBox(box3Helper);
+            }
+
+            reRenderViewer();
+          }
         } else {
           if (control) {
+            if (selectionBox) {
+              selectionBox.visible = false;
+            }
             detachControls(true);
           }
         }
       }
       if (clickMode === ClickMode.Measure) {
-        console.log("First");
-        orbit.enabled = false;
-        raycaster.setFromCamera(mouse, currentCamera);
-        const intersection = raycaster.intersectObjects(
-          scene.children.filter(
-            (obj) => obj.type === "Mesh" || obj.type === "Points"
-          )
-        );
-        console.log(intersection);
-        if (intersection.length > 0) {
-          if (!drawingLine) {
-            console.log(intersection);
-            control.enabled = false;
-            const points = [];
-            points.push(intersection[0].point);
-            points.push(intersection[0].point.clone());
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            line = new THREE.LineSegments(
-              geometry,
-              new THREE.LineBasicMaterial({
-                color: 0x000000,
-                transparent: false,
-                linewidth: 50,
-                // depthTest: false,
-                // depthWrite: false
-              })
-            );
-            line.frustumCulled = false;
-            scene.add(line);
-
-            const measurementDiv = document.createElement(
-              "div"
-            ) as HTMLDivElement;
-            document
-              .getElementById("ifc-viewer-container")
-              .appendChild(measurementDiv);
-            measurementDiv.className = "measurementLabel";
-            measurementDiv.innerText = "0.0m";
-            const measurementLabel = new CSS2DObject(measurementDiv);
-            measurementLabel.position.copy(intersection[0].point);
-            measurementLabels[lineId] = measurementLabel;
-            scene.add(measurementLabels[lineId]);
-            drawingLine = true;
-            reRenderViewer();
-          } else {
-            //finish the line
-            console.log("Second");
-            orbit.enabled = true;
-
-            const positions = //@ts-ignore
-              line.geometry.attributes.position.array as Array<number>;
-            positions[3] = intersection[0].point.x;
-            positions[4] = intersection[0].point.y;
-            positions[5] = intersection[0].point.z;
-            console.log(line);
-            line.geometry.attributes.position.needsUpdate = true;
-            lineId++;
-            drawingLine = false;
-            control.enabled = true;
-            setClickMode(ClickMode.Select);
-            reRenderViewer();
-          }
-        }
       }
     }
   }
 
   function onMouseMove(event) {
-    if (clickMode === ClickMode.Measure) {
-      event.preventDefault();
-
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-      if (drawingLine) {
-        raycaster.setFromCamera(mouse, currentCamera);
-        const intersection = raycaster.intersectObjects(
-          scene.children.filter((obj) => obj.type === "Mesh")
-        );
-        if (intersection.length > 0) {
-          const positions = //@ts-ignore
-            line.geometry.attributes.position.array as Array<number>;
-          const v0 = new THREE.Vector3(
-            positions[0],
-            positions[1],
-            positions[2]
-          );
-          const v1 = new THREE.Vector3(
-            intersection[0].point.x,
-            intersection[0].point.y,
-            intersection[0].point.z
-          );
-          positions[3] = intersection[0].point.x;
-          positions[4] = intersection[0].point.y;
-          positions[5] = intersection[0].point.z;
-          line.geometry.attributes.position.needsUpdate = true;
-          const distance = v0.distanceTo(v1);
-          measurementLabels[lineId].element.innerText =
-            distance.toFixed(2) + "m";
-          measurementLabels[lineId].position.lerpVectors(v0, v1, 0.5);
-        }
-      }
+    if (clickMode === ClickMode.Measure && orbit.enabled === false) {
+    } else if (clickMode === ClickMode.Select) {
     }
   }
 

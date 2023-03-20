@@ -16,6 +16,7 @@ export interface ChangedDocument {
 export enum ClickMode {
   Select = "Select",
   Measure = "Measure",
+  Orbit = "Orbit",
 }
 
 export type ViewerContextType = {
